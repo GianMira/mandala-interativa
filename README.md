@@ -48,7 +48,7 @@ Os modelos de detecção de mão (~16 MB) são baixados automaticamente na prime
 
 5. Execute:
    ```
-   python mandala_demo_9_c920_foco_luz.py
+   python mandala-interativa.py
    ```
 
 ---
@@ -74,7 +74,7 @@ Os modelos de detecção de mão (~16 MB) são baixados automaticamente na prime
 
 4. Execute:
    ```
-   python mandala_demo_9_c920_foco_luz.py
+   python mandala-interativa.py
    ```
 
 ---
@@ -101,7 +101,7 @@ Os modelos de detecção de mão (~16 MB) são baixados automaticamente na prime
 
 5. Execute:
    ```
-   python mandala_demo_9_c920_foco_luz.py
+   python mandala-interativa.py
    ```
 
    Na primeira execução o macOS pode pedir permissão de câmera — aceite em **Ajustes do Sistema → Privacidade e Segurança → Câmera**.

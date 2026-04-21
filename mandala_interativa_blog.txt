@@ -1,0 +1,190 @@
+Mandala Interativa com Webcam — Como funciona e como rodar
+===========================================================
+
+O que é
+-------
+Um programa Python que gera uma mandala generativa controlada pela sua mão
+em tempo real. A webcam captura o movimento da mão, o MediaPipe detecta os
+landmarks (21 pontos por mão), e o Pygame desenha a mandala respondendo a:
+
+  - posição da mão → move a mandala pela tela
+  - distância polegar+indicador (pinça) → zoom
+  - rotação da palma → gira as camadas em sentidos opostos
+  - velocidade do movimento → acelera a rotação e dispara partículas
+  - 2 mãos detectadas → duas mandalas independentes
+
+Além disso, o programa usa o MediaPipe Image Segmenter para separar a
+pessoa do fundo e aplicar um blur gaussiano no fundo, como o efeito de
+câmera desfocada do Zoom/Teams. Tudo em tempo real, sem GPU dedicada.
+
+
+Como funciona por dentro
+------------------------
+
+Captura de câmera (thread separada)
+  A leitura do frame roda numa thread dedicada, independente do loop
+  principal do Pygame. Isso evita que um frame lento trave a animação.
+  O loop principal sempre pega o frame mais recente disponível.
+
+Detecção de mão (MediaPipe Hand Landmarker)
+  A cada frame, o MediaPipe detecta até 2 mãos e retorna 21 landmarks
+  normalizados (x, y entre 0 e 1). O programa usa:
+    - landmark 9  → centro da palma (posição da mandala)
+    - landmarks 4 e 8 → distância polegar-indicador (zoom)
+    - landmarks 0 e 9 → ângulo pulso→dedo médio (rotação)
+
+Mandala (classe Mandala)
+  4 camadas concêntricas, cada uma com número de pétalas diferente.
+  As camadas pares giram em um sentido, as ímpares no sentido contrário,
+  amplificando visualmente a rotação da palma. Cada pétala tem seu próprio
+  fator de comprimento que varia suavemente (lerp), fazendo a mandala
+  "respirar". Setores coloridos com alpha acendem aleatoriamente conforme
+  a velocidade da mão.
+
+Desfoque de fundo (MediaPipe Image Segmenter)
+  O selfie_segmenter_landscape gera uma máscara float [0..1] por pixel,
+  onde 1.0 = pessoa e 0.0 = fundo. A máscara recebe um blur leve nas
+  bordas para evitar o efeito de "recorte". O frame final é uma
+  interpolação linear: pessoa × máscara + fundo_borrado × (1 - máscara).
+
+Controle de exposição (só Windows)
+  No Windows, o OpenCV com backend DirectShow (DSHOW) permite ajustar
+  CAP_PROP_EXPOSURE em tempo real. Valores típicos: -4 (claro) a -8
+  (escuro). Em Linux e macOS a exposição é gerenciada automaticamente
+  pelo driver da câmera.
+
+
+Dependências
+------------
+Python 3.10 ou 3.11 (recomendado — 3.12+ pode ter incompatibilidades
+com MediaPipe no momento desta publicação)
+
+Pacotes:
+  opencv-python  >= 4.8.0   (captura de câmera e processamento de imagem)
+  mediapipe      >= 0.10.9  (detecção de mão e segmentação de pessoa)
+  pygame         >= 2.5.0   (janela, desenho e eventos de teclado)
+  numpy          >= 1.24.0  (operações em arrays de imagem)
+
+Modelos baixados automaticamente na primeira execução:
+  hand_landmarker.task              (~15 MB, detecção de mão)
+  selfie_segmenter_landscape.tflite (~1 MB, segmentação de pessoa)
+  Os arquivos ficam na mesma pasta do script.
+
+
+Preparando o ambiente
+---------------------
+
+Windows
+  1. Instale Python 3.11 em python.org (marque "Add to PATH")
+  2. Abra o PowerShell na pasta do projeto
+  3. Crie e ative o ambiente virtual:
+
+       python -m venv venv
+       venv\Scripts\activate
+
+  4. Instale as dependências:
+
+       pip install opencv-python mediapipe pygame numpy
+
+  5. Execute:
+
+       python mandala-interativa.py
+
+Linux (Ubuntu/Debian)
+  1. sudo apt install python3.11 python3.11-venv python3-pip
+  2. python3.11 -m venv venv && source venv/bin/activate
+  3. pip install opencv-python mediapipe pygame numpy
+  4. Se a câmera não abrir: sudo apt install v4l-utils
+     e verifique: v4l2-ctl --list-devices
+  5. python mandala-interativa.py
+
+macOS
+  1. brew install python@3.11  (requer Homebrew)
+  2. python3.11 -m venv venv && source venv/bin/activate
+  3. pip install opencv-python mediapipe pygame numpy
+  4. Na primeira execução o macOS pode pedir permissão de câmera —
+     aceite em Preferências do Sistema > Privacidade > Câmera
+  5. python mandala-interativa.py
+
+
+Descobrindo o ID da câmera
+--------------------------
+Por padrão o script usa CAMERA_ID = 0, que é sempre a câmera embutida
+ou a única câmera conectada. Se você tiver mais de uma câmera (USB,
+virtual, celular via DroidCam, etc.) e quiser usar outra, rode o script
+auxiliar incluído no projeto:
+
+  pip install pygrabber   # só Windows; lista nomes das câmeras
+  python camera_find.py
+
+Exemplo de saída no Windows:
+  [0] Integrated Webcam          →  640x480
+  [1] DroidCam (celular)         →  1280x720
+  [2] HD Pro Webcam              →  1280x720   ← essa
+
+No Linux, as câmeras aparecem como /dev/video0, /dev/video1, etc.
+O índice do OpenCV corresponde ao número no final: video0 = 0, video2 = 2.
+
+Depois de identificar o índice, edite a linha no script:
+  CAMERA_ID = 2   # troque pelo número correto
+
+
+Controles
+---------
+  [1] a [5]   Muda a paleta de cores (Terra, Âmbar, Oceano, Ametista, Névoa)
+  [+] / [-]   Aumenta ou diminui o número de pétalas (6 a 32)
+  [B]         Alterna o blend mode: Normal ou Aditivo (efeito neon)
+  [C]         Liga/desliga a imagem da câmera no fundo
+  [D]         Liga/desliga o desfoque de fundo (estilo Zoom)
+  [[]         Câmera mais escura — só Windows (exposição -1, mínimo -8)
+  []]         Câmera mais clara  — só Windows (exposição +1, máximo -4)
+  [F]         Fullscreen / janela
+  [S]         Salva screenshot (screenshot_AAAAMMDD_HHMMSS.png)
+  [R]         Inicia / para gravação de vídeo (mandala_AAAAMMDD_HHMMSS.mp4)
+  [Q] / ESC   Sair
+
+
+Compatibilidade por sistema operacional
+---------------------------------------
+
+Funcionalidade              Windows   Linux    macOS
+--------------------------  --------  -------  ------
+Detecção de mão             sim       sim      sim
+Desfoque de fundo           sim       sim      sim
+Gravação MP4                sim       sim *    sim *
+Controle de exposição [ ]   sim       não      não
+Câmera embutida (id=0)      sim       sim      sim
+Câmera USB (id=1,2...)      sim       sim      sim
+Câmera virtual (DroidCam)   sim       sim      sim
+
+* No Linux e macOS o codec mp4v pode exigir instalação extra do FFmpeg.
+  Se o vídeo não gravar, instale: sudo apt install ffmpeg (Linux)
+  ou: brew install ffmpeg (macOS).
+
+
+Ajustes de performance
+----------------------
+Se o FPS cair abaixo de 20 com o desfoque ativado:
+
+  1. Reduza a resolução da câmera — edite W, H = 960, 540
+  2. Reduza o BLUR_KERNEL — troque 55 por 31 ou 21
+  3. Desative o desfoque (tecla D) — o hand landmarker continua rodando
+  4. Em CPUs mais antigas, o MediaPipe pode ser o gargalo —
+     experimente rodar sem o desfoque primeiro para comparar o FPS
+
+O FPS é exibido no canto superior esquerdo da tela em tempo real.
+
+
+Estrutura do projeto
+--------------------
+  mandala-interativa.py   script principal
+  camera_find.py                    lista câmeras disponíveis com nomes
+  requirements.txt                  dependências (pip install -r requirements.txt)
+  hand_landmarker.task              modelo MediaPipe (baixado automaticamente)
+  selfie_segmenter_landscape.tflite modelo de segmentação (baixado automaticamente)
+
+
+Código aberto
+-------------
+Sinta-se livre para modificar, adaptar e compartilhar.
+Os modelos MediaPipe são distribuídos pelo Google sob licença Apache 2.0.
