@@ -1,0 +1,8 @@
+.venv/
+*.task
+*.tflite
+*.mp4
+screenshot_*.png
+__pycache__/
+*.pyc
+*:Zone.Identifier
